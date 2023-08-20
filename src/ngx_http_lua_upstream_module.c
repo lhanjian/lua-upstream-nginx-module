@@ -517,9 +517,40 @@ ngx_http_lua_upstream_find_upstream(lua_State *L, ngx_str_t *host)
     ngx_http_upstream_main_conf_t        *umcf;
 
     umcf = ngx_http_lua_upstream_get_upstream_main_conf(L);
+
+#if (NGX_HTTP_UPSTREAM_RBTREE)
+
+    ngx_list_part_t                *part;
+
+    uscf = ngx_http_upstream_rbtree_lookup(umcf, host);
+
+    if (uscf != NULL)
+    {
+        return uscf;
+    }
+
+    part = &umcf->implicit_upstreams.part;
+    uscfp = part->elts;
+
+    for (i = 0; /* void */ ; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            uscfp = part->elts;
+            i = 0;
+        }
+
+#else
+
     uscfp = umcf->upstreams.elts;
 
     for (i = 0; i < umcf->upstreams.nelts; i++) {
+
+#endif
 
         uscf = uscfp[i];
 
@@ -542,7 +573,30 @@ ngx_http_lua_upstream_find_upstream(lua_State *L, ngx_str_t *host)
 
         len = port - host->data - 1;
 
+#if (NGX_HTTP_UPSTREAM_RBTREE)
+        ngx_str_t addr;
+        addr.data = host->data;
+        addr.len = len;
+        uscf = ngx_http_upstream_rbtree_lookup(umcf, &addr);
+        if (uscf != NULL && uscf->port
+            && uscf->port == n)
+        {
+            return uscf;
+        }
+        part = &umcf->implicit_upstreams.part;
+        uscfp = part->elts;
+        for (i = 0; /* void */ ; i++) {
+            if (i >= part->nelts) {
+                if (part->next == NULL) {
+                    break;
+                }
+                part = part->next;
+                uscfp = part->elts;
+                i = 0;
+            }
+#else
         for (i = 0; i < umcf->upstreams.nelts; i++) {
+#endif
 
             uscf = uscfp[i];
 
